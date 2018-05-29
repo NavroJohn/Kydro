@@ -39,7 +39,8 @@ def generate_cmat(image, min_dist, max_dist, dist_interval = 2):
         for w in water:
             du = np.abs(l[0] - w[0]) * pixel_size
             dl = np.abs(l[1] - w[1]) * pixel_size
-            dist.append((dl,du))
+            if dl <= max_dist and du <= max_dist:
+                dist.append((dl,du))
 
     print("Distance computation complete!")
     dist_interval *= pixel_size
@@ -68,7 +69,6 @@ def generate_transition_mat(images, calc_year, min_dist, max_dist, dist_interval
     final_year = max(list(images.keys()))
     print("\nFINAL YEAR " + str(final_year) + "...")
     final_year_cmat = generate_cmat(images[final_year], min_dist, max_dist, dist_interval)
-    print(final_year_cmat)
     eroded_mat = np.abs(calc_year_cmat - final_year_cmat)
     pmat = np.divide(eroded_mat, calc_year_cmat, out = np.zeros_like(eroded_mat), where = calc_year_cmat != 0)
     return calc_year_cmat, eroded_mat, pmat
