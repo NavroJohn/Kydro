@@ -1,12 +1,13 @@
 from osgeo import gdal
 import numpy as np
 import glob
+import os
 
 def read_images(path, imgformat):
     images = {}
-    files = path + "\\" + imgformat
+    files = os.path.join(path, imgformat)
     for file in glob.glob(files):
-        pos = file.rfind('\\') + 1
+        pos = file.rfind(os.sep) + 1
         year = int(file[pos : pos + 4])
         images[year] = gdal.Open(file)
     return images
@@ -34,8 +35,8 @@ def generate_cmat(image, min_dist, max_dist, dist_interval = 2):
     print("#Land Pixels = ", len(land), "\n#Water Pixels = ", len(water))
     dist = []
     print("Calculating lateral and upstream distances...")
-    for l in land[:6000]:
-        for w in water[:6000]:
+    for l in land:
+        for w in water:
             du = np.abs(l[0] - w[0]) * pixel_size
             dl = np.abs(l[1] - w[1]) * pixel_size
             dist.append((dl,du))
@@ -78,8 +79,7 @@ print("Finished reading")
 print("Calculating Transition Matrix...")
 cmat, emat, pmat = generate_transition_mat(images, 2010, 50, 200, 1)
 print("Transition Matrix Calculated...\n")
-print(cmat)
-print(emat)
-print(pmat)
-
+print("C = ", cmat)
+print("E = ", emat)
+print("P = ", pmat)
 
