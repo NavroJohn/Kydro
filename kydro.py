@@ -36,7 +36,8 @@ def read_input(years):
     '''
     Sample input is as follows...
     Enter minimum distance: 50
-    Enter a valid year: 2010
+    Enter calculation year: 2002
+    Enter end year: 2006 
     Enter number of rows/cols in transition matrix: 5
     Enter distance interval: 2
     Enter 0/1 for AP/GP: 1
@@ -45,8 +46,11 @@ def read_input(years):
     min_dist = int(input('Enter minimum distance: '))
     if min_dist < 0:
         raise ValueError('Invalid input')
-    year = int(input('Enter a valid year: '))
-    if year not in years:
+    calc_year = int(input('Enter calculation year: '))
+    if calc_year not in years:
+        raise ValueError("Invalid year")
+    end_year = int(input('Enter end year: '))
+    if end_year not in years:
         raise ValueError("Invalid year")
     terms = int(input('Enter number of rows/cols in transition matrix: '))
     dist_interval = int(input('Enter distance interval: '))
@@ -55,7 +59,7 @@ def read_input(years):
     progression = int(input('Enter 0/1 for AP/GP: '))
     if progression < 0 or progression > 1 or (progression == 1 and dist_interval == 1):
         raise ValueError("Invalid input")
-    return min_dist, year, terms, dist_interval, progression
+    return min_dist, calc_year, end_year, terms, dist_interval, progression
 
 
 def get_landuse_pixels(img_mat):
@@ -89,24 +93,19 @@ def get_nearest_channel(land_pixels, water_pixels, pixel_size, max_dist):
     :return: Dictionary containing nearest channel information.
     """
 
-    dist_land_dict = defaultdict(lambda: [])
-    for l in land_pixels:
-        for w in water_pixels:
+    dist_land_dict = {}
+    for l in land_pixels:  # for each land pixel
+        dl_list = []
+        du_list = []
+        for w in water_pixels:  # for each water pixel
             du = np.abs(l[0] - w[0]) * pixel_size
             dl = np.abs(l[1] - w[1]) * pixel_size
-            if dl <= max_dist and du <= max_dist:
-                dist = ((l[0] - w[0]) ** 2 + (l[1] - w[1]) ** 2) ** 0.5  # Euclidean distance
-                dist_land_dict[l].append((dl, du, dist))  # add valid land pixels and respective distances
-    channel_dict = defaultdict(lambda: [])
-    for land, dist in dist_land_dict.items():
-        min_dist = dist[0]
-        for value in dist[1:]:
-            if value[-1] < min_dist[-1]:
-                min_dist = value
-        for value in dist:
-            if value == min_dist:  # min_dist is the minimum distance obtained in the previous loop
-                channel_dict[land].append(value[:2])  # multiple minimum values will be appended to a list
-    return channel_dict
+            if dl <= max_dist and du <= max_dist:  # distances more than max_dist are not considered
+                dl_list.append(dl)
+                du_list.append(du)
+        if dl_list and du_list:  # check if dl and du lists are not empty
+            dist_land_dict[l] = (min(dl_list), min(du_list))  # add valid land pixels and respective distances
+    return dist_land_dict
 
 
 def generate_cmat(image, min_dist, terms, dist_interval, progression):
@@ -143,27 +142,25 @@ def generate_cmat(image, min_dist, terms, dist_interval, progression):
     cmat = np.zeros((terms, terms))  # create null matrix of termsXterms size
     print("Computing C Matrix...")
     selected_land_pixels = defaultdict(lambda: [])
-    for (land, dist_list) in dist_land_dict.items():
-        dist_dict = {}
-        for (index, dist) in enumerate(dist_list):
-            for (row, dl) in enumerate(dist_range):
-                for (col, du) in enumerate(dist_range):
-                    if dist[0] <= dl and dist[1] <= du and index not in dist_dict.keys():
-                        dist_dict[index] = True
+    for (land, dist) in dist_land_dict.items():
+        for (row, dl) in enumerate(dist_range):
+            for (col, du) in enumerate(dist_range):
+                if dist[0] <= dl and dist[1] <= du:
                         cmat[row, col] += 1  # add land pixel to the (row, col) position of the C Matrix.
                         # land pixels satisfying the distance condition are added to the dictionary
-                        if land not in selected_land_pixels[(dl, du)]:
+                        if land not in selected_land_pixels[(dl, du)]:  # already selected pixel is discarded
                             selected_land_pixels[(dl, du)].append(land)
     print("Finished C Matrix!")
     return cmat, (land_pixels, water_pixels, selected_land_pixels, img_mat.shape)
 
 
-def generate_transition_mat(images, calc_year, min_dist, terms, dist_interval, progression):
+def generate_transition_mat(images, calc_year, final_year, min_dist, terms, dist_interval, progression):
 
     """
     Function to calculate the transition matrix specified in Graf's model.
     :param images: Dictionary of images having year as key and GDAL Image Object as value.
     :param calc_year: User specified year for which the transition matrix is computed.
+    :param final_year: User specified final year using which erosion matrix is computed.
     :param min_dist: Minimum lateral (dl) and upstream distance (du). Must not be less than the pixel size.
     :param terms: Number of rows and columns of the transition matrix.
     :param dist_interval: Interval at which dl and du are to be generated.
@@ -178,7 +175,6 @@ def generate_transition_mat(images, calc_year, min_dist, terms, dist_interval, p
     print("\nYEAR " + str(calc_year) + "...")
     map_dict = {}
     calc_year_cmat, map_dict[calc_year] = generate_cmat(images[calc_year], min_dist, terms, dist_interval, progression)
-    final_year = max(list(images.keys()))
     print("\nFINAL YEAR " + str(final_year) + "...")
     final_year_cmat, map_dict[final_year] = generate_cmat(images[final_year], min_dist, terms, dist_interval, progression)
     print("\nC" + str(final_year) + "=", final_year_cmat)
@@ -208,7 +204,7 @@ def set_pixels(img_size, pixel_list, exclusion_list = ()):
     return arr
 
 
-def create_maps(map_info, outfile):
+def create_maps(map_info, projection, outfile):
 
     """
     Create RGB maps for land and water classes
@@ -218,14 +214,18 @@ def create_maps(map_info, outfile):
     """
 
     print('\nCreating RGB maps...')
+    if not os.path.exists('Maps'):
+        os.mkdir('Maps')
     land, water, slp, img_size = map_info
     bands = [set_pixels(img_size, water)]
     driver = gdal.GetDriverByName("GTiff")
+    outfile = 'Maps/' + outfile  # store generated maps in Maps directory
     for dist in slp.keys():
         bands.append(set_pixels(img_size, land, slp[dist]))
         bands.append(set_pixels(img_size, slp[dist]))
         new_file = outfile + "_" + str(dist[0]) + "_" + str(dist[1]) + '.tif'
-        outdata = driver.Create(new_file, img_size[1], img_size[0], 3, gdal.GDT_Byte)
+        outdata = driver.Create(new_file, img_size[1], img_size[0], 3, gdal.GDT_Byte)  # set 3 bands, 24-bit image
+        outdata.SetProjection(projection)
         for (index, band) in enumerate(bands):
             outdata.GetRasterBand(index + 1).WriteArray(band)
         outdata.FlushCache()
@@ -234,12 +234,13 @@ def create_maps(map_info, outfile):
 
 
 images = read_images('Data', '*.tif')  # get image dictionary
-min_dist, year, terms, dist_interval, progression = read_input(images.keys())  # read required inputs
-cmat, emat, pmat, map_dict = generate_transition_mat(images, year, min_dist,
+
+min_dist, calc_year, end_year, terms, dist_interval, progression = read_input(images.keys())  # read required inputs
+cmat, emat, pmat, map_dict = generate_transition_mat(images, calc_year, end_year, min_dist,
                                            terms, dist_interval, progression)  # get transition matrix
 
-print("C" + str(year) + "= ", cmat)
+print("C" + str(calc_year) + "= ", cmat)
 print("E = ", emat)
 print("P = ", pmat)
 
-#create_maps(map_dict[year], 'map')
+create_maps(map_dict[calc_year], images[calc_year].GetProjection(), 'map')
