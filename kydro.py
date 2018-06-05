@@ -36,8 +36,8 @@ def read_input(years):
     '''
     Sample input is as follows...
     Enter minimum distance: 50
-    Enter calculation year: 2002
-    Enter end year: 2006 
+    Enter calculation year: 2006
+    Enter end year: 2002 
     Enter number of rows/cols in transition matrix: 5
     Enter distance interval: 2
     Enter 0/1 for AP/GP: 1
@@ -142,14 +142,16 @@ def generate_cmat(image, min_dist, terms, dist_interval, progression):
     cmat = np.zeros((terms, terms))  # create null matrix of termsXterms size
     print("Computing C Matrix...")
     selected_land_pixels = defaultdict(lambda: [])
-    for (land, dist) in dist_land_dict.items():
-        for (row, dl) in enumerate(dist_range):
-            for (col, du) in enumerate(dist_range):
-                if dist[0] <= dl and dist[1] <= du:
-                        cmat[row, col] += 1  # add land pixel to the (row, col) position of the C Matrix.
-                        # land pixels satisfying the distance condition are added to the dictionary
-                        if land not in selected_land_pixels[(dl, du)]:  # already selected pixel is discarded
-                            selected_land_pixels[(dl, du)].append(land)
+    dist_land = {}
+    for (row, dl) in enumerate(dist_range):
+        for (col, du) in enumerate(dist_range):
+            for (land, dist) in dist_land_dict.items():
+                if dist[0] <= dl and dist[1] <= du and land not in dist_land.keys():  # pixels that are already counted are discarded
+                    cmat[row, col] += 1  # add land pixel to the (row, col) position of the C Matrix.
+                    # land pixels satisfying the distance condition are added to the dictionary
+                    if land not in selected_land_pixels[(dl, du)]:  # already selected pixel is discarded
+                        selected_land_pixels[(dl, du)].append(land)
+                    dist_land[land] = True
     print("Finished C Matrix!")
     return cmat, (land_pixels, water_pixels, selected_land_pixels, img_mat.shape)
 
@@ -178,7 +180,7 @@ def generate_transition_mat(images, calc_year, final_year, min_dist, terms, dist
     print("\nFINAL YEAR " + str(final_year) + "...")
     final_year_cmat, map_dict[final_year] = generate_cmat(images[final_year], min_dist, terms, dist_interval, progression)
     print("\nC" + str(final_year) + "=", final_year_cmat)
-    eroded_mat = np.abs(calc_year_cmat - final_year_cmat)
+    eroded_mat = calc_year_cmat - final_year_cmat
     # the following line simply replaces NaN with zeros in case the denominator is 0.
     pmat = np.divide(eroded_mat, calc_year_cmat, out = np.zeros_like(eroded_mat), where = calc_year_cmat != 0)
     print("\nTransition Matrix Calculated...\n")
