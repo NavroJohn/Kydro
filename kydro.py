@@ -149,8 +149,8 @@ def generate_cmat(image, min_dist, terms, dist_interval, progression):
                 if dist[0] <= dl and dist[1] <= du and land not in dist_land.keys():  # pixels that are already counted are discarded
                     cmat[row, col] += 1  # add land pixel to the (row, col) position of the C Matrix.
                     # land pixels satisfying the distance condition are added to the dictionary
-                    if land not in selected_land_pixels[(dl, du)]:  # already selected pixel is discarded
-                        selected_land_pixels[(dl, du)].append(land)
+                    # already selected pixel is discarded
+                    selected_land_pixels[(dl, du)].append(land)
                     dist_land[land] = True
     print("Finished C Matrix!")
     return cmat, (land_pixels, water_pixels, selected_land_pixels, img_mat.shape)
@@ -206,10 +206,12 @@ def set_pixels(img_size, pixel_list, exclusion_list = ()):
     return arr
 
 
-def create_maps(map_info, projection, outfile):
+def create_maps(map_info, projection, geotransform, outfile):
 
     """
     Create RGB maps for land and water classes
+    :param geotransform: Get input raster parameters
+    :param projection: Get input raster projection
     :param map_info: highlighting land, water and land pixels belonging to specified distance classes
     :param outfile: output file name without extension
     :return: None
@@ -222,12 +224,14 @@ def create_maps(map_info, projection, outfile):
     bands = [set_pixels(img_size, water)]
     driver = gdal.GetDriverByName("GTiff")
     outfile = 'Maps/' + outfile  # store generated maps in Maps directory
+    print(slp)
     for dist in slp.keys():
         bands.append(set_pixels(img_size, land, slp[dist]))
         bands.append(set_pixels(img_size, slp[dist]))
         new_file = outfile + "_" + str(dist[0]) + "_" + str(dist[1]) + '.tif'
         outdata = driver.Create(new_file, img_size[1], img_size[0], 3, gdal.GDT_Byte)  # set 3 bands, 24-bit image
         outdata.SetProjection(projection)
+        outdata.SetGeoTransform(geotransform)
         for (index, band) in enumerate(bands):
             outdata.GetRasterBand(index + 1).WriteArray(band)
         outdata.FlushCache()
@@ -245,4 +249,4 @@ print("C" + str(calc_year) + "= ", cmat)
 print("E = ", emat)
 print("P = ", pmat)
 
-create_maps(map_dict[calc_year], images[calc_year].GetProjection(), 'map')
+create_maps(map_dict[calc_year], images[calc_year].GetProjection(), images[calc_year].GetGeoTransform(), 'map')
