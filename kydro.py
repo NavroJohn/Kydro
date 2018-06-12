@@ -82,6 +82,27 @@ def get_landuse_pixels(img_mat):
     return land, water
 
 
+def get_dist_list(land, water, type, max_dist, ps):
+
+    """
+    Get land-water distance list
+    :param land: one land pixel
+    :param water: all water pixels
+    :param type: 0 means calculate du, and 1 means calculate dl
+    :param max_dist: maximum allowable distance
+    :param ps: pixel size
+    :return: List of distances
+    """
+    dist_list = []
+    for w in water:
+        if w[type] == land[type]:
+            t = int(not type)
+            dist = np.abs(land[t] - w[t]) * ps
+            if dist <= max_dist:
+                dist_list.append(dist)
+    return dist_list
+
+
 def get_nearest_channel(land_pixels, water_pixels, pixel_size, max_dist):
 
     """
@@ -95,14 +116,8 @@ def get_nearest_channel(land_pixels, water_pixels, pixel_size, max_dist):
 
     dist_land_dict = {}
     for l in land_pixels:  # for each land pixel
-        dl_list = []
-        du_list = []
-        for w in water_pixels:  # for each water pixel
-            du = np.abs(l[0] - w[0]) * pixel_size
-            dl = np.abs(l[1] - w[1]) * pixel_size
-            if dl <= max_dist and du <= max_dist:  # distances more than max_dist are not considered
-                dl_list.append(dl)
-                du_list.append(du)
+        dl_list = get_dist_list(l, water_pixels, 0, max_dist, pixel_size)
+        du_list = get_dist_list(l, water_pixels, 1, max_dist, pixel_size)
         if dl_list and du_list:  # check if dl and du lists are not empty
             dist_land_dict[l] = (min(dl_list), min(du_list))  # add valid land pixels and respective distances
     return dist_land_dict
