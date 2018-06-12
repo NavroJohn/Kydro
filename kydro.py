@@ -224,18 +224,17 @@ def create_maps(map_info, projection, geotransform, outfile):
     bands = [set_pixels(img_size, water)]
     driver = gdal.GetDriverByName("GTiff")
     outfile = 'Maps/' + outfile  # store generated maps in Maps directory
-    print(slp)
     for dist in slp.keys():
         bands.append(set_pixels(img_size, land, slp[dist]))
         bands.append(set_pixels(img_size, slp[dist]))
         new_file = outfile + "_" + str(dist[0]) + "_" + str(dist[1]) + '.tif'
         outdata = driver.Create(new_file, img_size[1], img_size[0], 3, gdal.GDT_Byte)  # set 3 bands, 24-bit image
-        outdata.SetProjection(projection)
-        outdata.SetGeoTransform(geotransform)
+        outdata.SetProjection(projection)  # set same projection as the input image
+        outdata.SetGeoTransform(geotransform)  # set image parameters like pixel size
         for (index, band) in enumerate(bands):
-            outdata.GetRasterBand(index + 1).WriteArray(band)
-        outdata.FlushCache()
-        del bands[1:]
+            outdata.GetRasterBand(index + 1).WriteArray(band)  # write data for R (water), G (land), B (selected land) bands
+        outdata.FlushCache()  # write image to disk
+        del bands[1:]  # since water array is unmodified, delete other two bands, i.e, G and B
     print('All Maps created!')
 
 
